@@ -67,7 +67,6 @@
   <nav class="header-nav">
     <a href="index.html"   class="nav-btn">首页</a>
     <a href="audit.html"   class="nav-btn">帖子审核管理</a>
-    <a href="comment.html" class="nav-btn">评论分析</a>
     <a href="user.html"    class="nav-btn">用户信息审核管理</a>
   </nav>
 </header>
@@ -116,12 +115,6 @@
       <span class="module-card-icon">📋</span>
       <div class="module-card-name">审核帖子管理</div>
       <div class="module-card-desc">审核通过率、审核员工作量、内容类型分布，支持按审核人和ID范围筛选，环比昨日对比</div>
-      <span class="module-card-arrow">→</span>
-    </a>
-    <a href="comment.html" class="module-card" style="--mc:var(--purple)">
-      <span class="module-card-icon">💬</span>
-      <div class="module-card-name">评论互动分析</div>
-      <div class="module-card-desc">帖子评论量统计、互动率分析，支持按Aff筛选，查看评论分布与高互动内容</div>
       <span class="module-card-arrow">→</span>
     </a>
     <a href="user.html" class="module-card" style="--mc:var(--green)">
@@ -241,7 +234,7 @@ function updateYestLabel() {
 }
 
 // ── 自动 fetch 候选文件列表（依次尝试）────────────────────────────────────────
-const AUTO_CSV_CANDIDATES = ['./table_1.csv', './data.csv', './export.csv'];
+const AUTO_CSV_CANDIDATES = ['./帖子数据.csv', './table_1.csv', './data.csv', './export.csv'];
 
 /**
  * tryAutoFetch：依次尝试 fetch 候选文件，找到第一个成功的就解析并渲染。

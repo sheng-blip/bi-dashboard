@@ -21,7 +21,6 @@
   <nav class="header-nav">
     <a href="index.html"   class="nav-btn">首页</a>
     <a href="audit.html"   class="nav-btn">帖子审核管理</a>
-    <a href="comment.html" class="nav-btn">评论分析</a>
     <a href="user.html"    class="nav-btn">用户信息审核管理</a>
   </nav>
 </header>
@@ -141,11 +140,27 @@ const CR = {};
 let allRows = [], filtered = [];
 
 // ── 初始化 ────────────────────────────────────────────────────────────────────
-function init() {
-  allRows = loadData();
+async function init() {
+  // 优先自动 fetch 帖子数据.csv
+  try {
+    const text = await fetch('帖子数据.csv?v=' + Date.now(), { cache: 'no-store' }).then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    });
+    const { rows, colIndex, detectedHeaders, warnings } = parseCSV(text);
+    if (rows.length) {
+      allRows = rows;
+      saveData(rows, { filename: '帖子数据.csv', autoFetched: true, colIndex, detectedHeaders, warnings });
+      toast('✅ 自动加载帖子数据.csv（' + rows.length + ' 条）', 'success');
+    }
+  } catch (_) {
+    // 自动加载失败，回退到缓存
+    allRows = loadData();
+  }
+
   if (!allRows?.length) {
     document.getElementById('metricsGrid').innerHTML =
-      '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>请先在首页加载CSV数据</div>';
+      '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>未找到数据文件，请在首页手动上传CSV</div>';
     return;
   }
   const mods = [...new Set(allRows.map(r => r.moderator?.name).filter(Boolean))].sort();
@@ -169,15 +184,8 @@ function readFilters() {
 
 function applyFilter() {
   const f = readFilters();
+  // filterRows 已包含 dateMin/dateMax（使用 createDate 字段）
   let rows = filterRows(allRows, f);
-  if (f.dateMin || f.dateMax) {
-    rows = rows.filter(r => {
-      if (!(r.date instanceof Date)) return true;
-      if (f.dateMin && r.date < f.dateMin) return false;
-      if (f.dateMax && r.date > f.dateMax) return false;
-      return true;
-    });
-  }
   filtered = rows;
   render(filtered);
 }

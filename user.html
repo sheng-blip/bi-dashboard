@@ -31,7 +31,6 @@
   <nav class="header-nav">
     <a href="index.html"   class="nav-btn">首页</a>
     <a href="audit.html"   class="nav-btn">帖子审核管理</a>
-    <a href="comment.html" class="nav-btn">评论分析</a>
     <a href="user.html"    class="nav-btn">用户信息审核管理</a>
   </nav>
 </header>
@@ -250,7 +249,7 @@ function useFallback() {
 
 // 尝试自动 fetch 用户数据.csv
 async function tryAutoFetchUser() {
-  const candidates = ['./用户数据.csv', './users.csv', './user_data.csv'];
+  const candidates = ['用户数据.csv', './users.csv', './user_data.csv'];
   for (const path of candidates) {
     try {
       const text = await fetchCSV(path);
