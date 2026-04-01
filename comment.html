@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>评论分析 - BI看板</title>
+<script>var _V=Date.now();</script>
+<script>document.write('<link rel="stylesheet" href="css/style.css?v='+_V+'">');</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+.src-bar {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:10px 18px; margin-bottom:18px;
+  background:rgba(124,77,255,.06); border:1px solid rgba(124,77,255,.2);
+  border-radius:10px; font-size:12px; color:var(--purple);
+}
+.src-bar strong { color:var(--text-primary); }
+.src-bar .src-actions { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="header-dot"></div>
+    <div>
+      <div class="header-title">wj-特战队1 林见鹿运营看板</div>
+      <div class="header-sub">评论互动分析</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a href="index.html"   class="nav-btn">首页</a>
+    <a href="audit.html"   class="nav-btn">帖子审核管理</a>
+    <a href="comment.html" class="nav-btn">评论分析</a>
+    <a href="user.html"    class="nav-btn">用户信息审核管理</a>
+  </nav>
+</header>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">💬 评论互动分析</div>
+    <div class="page-desc">帖子评论量统计 · 互动率分析 · Aff维度筛选</div>
+  </div>
+
+  <!-- ── 数据来源栏 ── -->
+  <div class="src-bar" id="srcBar">
+    <span>数据来源：<strong id="srcLabel">帖子数据（首页加载）</strong></span>
+    <span id="srcCount" style="color:var(--text-secondary)"></span>
+    <div class="src-actions">
+      <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:5px 14px">
+        📂 导入评论数据表
+        <input type="file" id="commentCsvFile" accept=".csv" style="display:none"
+               onchange="handleCommentFile(this.files[0])">
+      </label>
+      <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px"
+              onclick="useFallbackData()">使用帖子数据</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Aff ID</span>
+      <input class="filter-input" id="fAff" placeholder="输入Aff ID" style="min-width:110px" oninput="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">内容类型</span>
+      <select class="filter-select" id="fType" onchange="applyFilter()">
+        <option value="">全部类型</option>
+        <option value="视频">视频</option>
+        <option value="图片">图片</option>
+        <option value="文字">文字</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">审核状态</span>
+      <select class="filter-select" id="fReview" onchange="applyFilter()">
+        <option value="">全部</option>
+        <option value="通过">通过</option>
+        <option value="未通过">未通过</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">审核人</span>
+      <select class="filter-select" id="fMod" onchange="applyFilter()"><option value="">全部审核人</option></select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">日期范围</span>
+      <input class="filter-input" id="fDateMin" type="date" style="min-width:130px;color-scheme:dark" onchange="applyFilter()">
+      <span style="color:var(--text-secondary);font-size:12px">~</span>
+      <input class="filter-input" id="fDateMax" type="date" style="min-width:130px;color-scheme:dark" onchange="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">仅看有评论</span>
+      <input type="checkbox" id="fHasC"
+             style="accent-color:var(--cyan);width:16px;height:16px;cursor:pointer" onchange="applyFilter()">
+    </div>
+    <button class="btn btn-primary" onclick="applyFilter()">筛选</button>
+    <button class="btn btn-ghost"   onclick="resetFilter()">重置</button>
+  </div>
+
+  <div class="info-bar" id="infoBar" style="display:none">
+    <span id="infoText"></span>
+    <span id="infoYest" style="color:var(--text-secondary);font-size:11px"></span>
+  </div>
+
+  <div class="metrics-grid" id="metricsGrid"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">评论量分布（分桶）</div>
+      <div class="chart-box" id="cDist"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">各内容类型平均评论数</div>
+      <div class="chart-box" id="cTypeAvg"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">有 / 无评论帖子比例</div>
+      <div class="chart-box" id="cHasC"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">通过 vs 未通过 评论对比</div>
+      <div class="chart-box" id="cReviewC"></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">Aff 评论汇总 TOP20</div>
+    <div class="table-wrap" id="tAff"></div>
+  </div>
+
+  <div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">高评论帖子 TOP20</div>
+    <div class="table-wrap" id="tTop"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script>document.write('<scr'+'ipt src="js/parser.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>document.write('<scr'+'ipt src="js/common.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>
+const CR = {};
+let allRows = [], filtered = [];
+
+// ── 独立评论数据存储键 ─────────────────────────────────────────────────────────
+const KEY_COMMENT = 'bi_comment_data';
+const KEY_CMETA   = 'bi_comment_meta';
+
+function _loadCommentRows() {
+  try { const r = localStorage.getItem(KEY_COMMENT); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+function _loadCommentMeta() {
+  try { const m = localStorage.getItem(KEY_CMETA);  return m ? JSON.parse(m) : {};   } catch(e) { return {}; }
+}
+
+// ── 导入评论数据表 ────────────────────────────────────────────────────────────
+function handleCommentFile(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = e => {
+    try {
+      const { rows, colIndex, detectedHeaders, warnings } = parseCSV(e.target.result);
+      if (!rows.length) { toast('CSV 无有效数据', 'error'); return; }
+      try {
+        localStorage.setItem(KEY_COMMENT, JSON.stringify(rows));
+        localStorage.setItem(KEY_CMETA,   JSON.stringify({ filename:file.name, colIndex, detectedHeaders, warnings }));
+      } catch(err) { console.warn('Storage full?', err); }
+      toast(`✅ 已导入 ${rows.length} 条评论数据`, 'success');
+      initWithSource('comment_csv');
+    } catch(err) { toast('❌ 解析失败: ' + err.message, 'error'); }
+  };
+  fr.readAsText(file, 'UTF-8');
+}
+
+// ── 切回帖子数据 ──────────────────────────────────────────────────────────────
+function useFallbackData() {
+  localStorage.removeItem(KEY_COMMENT);
+  localStorage.removeItem(KEY_CMETA);
+  initWithSource('fallback');
+  toast('已切换至帖子数据源', 'info');
+}
+
+// ── 初始化（优先用独立评论数据，无则用帖子数据）─────────────────────────────
+function init() {
+  const commentRows = _loadCommentRows();
+  initWithSource(commentRows?.length ? 'comment_csv' : 'fallback');
+}
+
+function initWithSource(source) {
+  if (source === 'comment_csv') {
+    allRows = _loadCommentRows() || [];
+    const meta = _loadCommentMeta();
+    document.getElementById('srcLabel').textContent = meta.filename || '评论数据CSV';
+    document.getElementById('srcCount').textContent = `共 ${allRows.length} 条`;
+  } else {
+    allRows = loadData() || [];
+    document.getElementById('srcLabel').textContent = '帖子数据（首页加载）';
+    document.getElementById('srcCount').textContent = allRows.length ? `共 ${allRows.length} 条` : '未加载';
+  }
+
+  if (!allRows.length) {
+    document.getElementById('metricsGrid').innerHTML =
+      '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>请先在首页加载CSV，或点击「导入评论数据表」</div>';
+    return;
+  }
+
+  const mods    = [...new Set(allRows.map(r => r.moderator?.name).filter(Boolean))].sort();
+  const modSel  = document.getElementById('fMod');
+  modSel.innerHTML = '<option value="">全部审核人</option>';
+  populateSelect(modSel, mods);
+  applyFilter();
+  bindResize(CR);
+}
+
+function readFilters() {
+  const dMin = document.getElementById('fDateMin').value;
+  const dMax = document.getElementById('fDateMax').value;
+  return {
+    aff:        document.getElementById('fAff').value.trim()  || undefined,
+    type:       document.getElementById('fType').value        || undefined,
+    review:     document.getElementById('fReview').value      || undefined,
+    moderator:  document.getElementById('fMod').value         || undefined,
+    hasComment: document.getElementById('fHasC').checked      || undefined,
+    dateMin:    dMin ? new Date(dMin + 'T00:00:00') : undefined,
+    dateMax:    dMax ? new Date(dMax + 'T23:59:59') : undefined,
+  };
+}
+
+function applyFilter() {
+  const f = readFilters();
+  let rows = filterRows(allRows, f);
+  if (f.dateMin || f.dateMax) {
+    rows = rows.filter(r => {
+      if (!(r.date instanceof Date)) return true;
+      if (f.dateMin && r.date < f.dateMin) return false;
+      if (f.dateMax && r.date > f.dateMax) return false;
+      return true;
+    });
+  }
+  filtered = rows;
+  render(filtered);
+}
+function resetFilter() {
+  ['fAff','fType','fReview','fMod','fDateMin','fDateMax'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fHasC').checked = false;
+  applyFilter();
+}
+
+function render(rows) {
+  const s = calcSummary(rows);
+  const y = loadYesterday()?.summary;
+  document.getElementById('infoBar').style.display = 'flex';
+  document.getElementById('infoText').textContent = `筛选结果：${rows.length} 条帖子`;
+  document.getElementById('infoYest').textContent = y ? `昨日基准：${y.total} 条` : '暂无昨日基准';
+  renderMetrics(rows, s, y);
+  renderCharts(rows);
+  renderAffTable(rows);
+  renderTopTable(rows);
+}
+
+// ── 指标卡 ────────────────────────────────────────────────────────────────────
+function renderMetrics(rows, s, y) {
+  const totC        = rows.reduce((a,r) => a + (r.attr?.comments||0), 0);
+  const totL        = rows.reduce((a,r) => a + (r.attr?.likes||0), 0);
+  const totV        = rows.reduce((a,r) => a + (r.attr?.views||0), 0);
+  const withC       = rows.filter(r => (r.attr?.comments||0) > 0).length;
+  const avgC        = rows.length ? (totC/rows.length).toFixed(2) : 0;
+  const maxC        = rows.length ? Math.max(...rows.map(r => r.attr?.comments||0)) : 0;
+  const cRate       = rows.length ? (withC/rows.length*100).toFixed(1) : 0;
+  // 通过/拒绝评论数：基于审核结果字段（自动识别，容错）
+  const passComments = rows.filter(r => r.status?.review === '通过').reduce((a,r) => a + (r.attr?.comments||0), 0);
+  const failComments = rows.filter(r => r.status?.review === '未通过').reduce((a,r) => a + (r.attr?.comments||0), 0);
+
+  document.getElementById('metricsGrid').innerHTML = [
+    { icon:'📊', label:'总帖子数',   value:rows.length,   prev:y?.total,        accent:'var(--cyan)' },
+    { icon:'💬', label:'总评论数',   value:totC,          prev:y?.totComments,  accent:'var(--purple)' },
+    { icon:'✅', label:'通过评论数', value:passComments,  prev:null,            accent:'var(--green)' },
+    { icon:'❌', label:'拒绝评论数', value:failComments,  prev:null,            accent:'var(--red)' },
+    { icon:'📈', label:'有评论帖子', value:withC,         prev:y?.withComments, accent:'var(--green)' },
+    { icon:'⚡', label:'评论参与率', value:cRate+'%',     prev:null,            accent:'var(--cyan)' },
+    { icon:'🔢', label:'平均评论数', value:avgC,          prev:null,            accent:'var(--orange)' },
+    { icon:'🏆', label:'最高评论数', value:maxC,          prev:null,            accent:'var(--yellow)' },
+    { icon:'👍', label:'总点赞数',   value:totL,          prev:y?.totLikes,     accent:'var(--green)' },
+    { icon:'👁', label:'总浏览数',   value:totV,          prev:y?.totViews,     accent:'var(--cyan)' },
+  ].map(metricCardHTML).join('');
+}
+
+// ── 图表 ──────────────────────────────────────────────────────────────────────
+function renderCharts(rows) {
+  const ax = axisStyle();
+
+  // 评论分布桶
+  const buckets = { '0':0, '1':0, '2-5':0, '6-10':0, '10+':0 };
+  rows.forEach(r => {
+    const c = r.attr?.comments || 0;
+    if      (c === 0) buckets['0']++;
+    else if (c === 1) buckets['1']++;
+    else if (c <= 5)  buckets['2-5']++;
+    else if (c <= 10) buckets['6-10']++;
+    else              buckets['10+']++;
+  });
+  setChart(CR, 'cDist', {
+    ...baseOpt(), ...ax,
+    grid: { top:20, bottom:30, left:50, right:20 },
+    xAxis: { ...ax.xAxis, type:'category', data:Object.keys(buckets) },
+    yAxis: { ...ax.yAxis, type:'value' },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series:[{ type:'bar', data:Object.values(buckets),
+      itemStyle:{ color:gradV('#7c4dff','#00d4ff') },
+      label:{ show:true, position:'top', color:'#dde8ff', fontSize:11 }
+    }]
+  });
+
+  // 类型平均评论
+  const typeAgg = {};
+  rows.forEach(r => {
+    const t = r.type || '未知';
+    if (!typeAgg[t]) typeAgg[t] = { sum:0, cnt:0 };
+    typeAgg[t].sum += r.attr?.comments || 0;
+    typeAgg[t].cnt++;
+  });
+  const tNames = Object.keys(typeAgg);
+  const tAvgs  = tNames.map(t => +(typeAgg[t].sum / typeAgg[t].cnt).toFixed(2));
+  setChart(CR, 'cTypeAvg', {
+    ...baseOpt(), ...ax,
+    grid: { top:20, bottom:30, left:50, right:20 },
+    xAxis: { ...ax.xAxis, type:'category', data:tNames },
+    yAxis: { ...ax.yAxis, type:'value' },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series:[{ type:'bar', data:tAvgs,
+      itemStyle:{ color:gradV('#00e676','#00d4ff') },
+      label:{ show:true, position:'top', color:'#dde8ff', fontSize:11 }
+    }]
+  });
+
+  // 有/无评论饼
+  const withC = rows.filter(r => (r.attr?.comments||0)>0).length;
+  setChart(CR, 'cHasC', {
+    ...baseOpt(),
+    tooltip:{ ...baseOpt().tooltip, trigger:'item', formatter:'{b}: {c} ({d}%)' },
+    legend:{ bottom:0, textStyle:{color:'#8899bb'} },
+    series:[{ type:'pie', radius:['40%','68%'],
+      data:[
+        { value:withC,          name:'有评论', itemStyle:{color:'#00e676'} },
+        { value:rows.length-withC, name:'无评论', itemStyle:{color:'rgba(255,255,255,.12)'} },
+      ],
+      label:{ color:'#dde8ff' }
+    }]
+  });
+
+  // 通过/未通过 评论对比
+  const groups = { '通过':{ sum:0,cnt:0 }, '未通过':{ sum:0,cnt:0 } };
+  rows.forEach(r => {
+    const k = r.status?.review || '未知';
+    if (!groups[k]) groups[k] = { sum:0, cnt:0 };
+    groups[k].sum += r.attr?.comments || 0;
+    groups[k].cnt++;
+  });
+  const gNames = Object.keys(groups);
+  setChart(CR, 'cReviewC', {
+    ...baseOpt(), ...ax,
+    grid: { top:20, bottom:60, left:60, right:20 },
+    xAxis: { ...ax.xAxis, type:'category', data:gNames },
+    yAxis: { ...ax.yAxis, type:'value' },
+    legend:{ bottom:0, textStyle:{color:'#8899bb'} },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series:[
+      { name:'总评论', type:'bar',  data:gNames.map(k=>groups[k].sum), itemStyle:{color:'#00d4ff'} },
+      { name:'均评论', type:'line', data:gNames.map(k=>+(groups[k].sum/(groups[k].cnt||1)).toFixed(2)),
+        itemStyle:{color:'#ff9800'}, symbol:'circle', symbolSize:8 },
+    ]
+  });
+}
+
+// ── 表格 ──────────────────────────────────────────────────────────────────────
+function renderAffTable(rows) {
+  const agg = {};
+  rows.forEach(r => {
+    const k = r.user?.aff || '未知';
+    if (!agg[k]) agg[k] = { aff:k, name:r.user?.name||'', posts:0, comments:0, likes:0, views:0 };
+    agg[k].posts++;
+    agg[k].comments += r.attr?.comments || 0;
+    agg[k].likes    += r.attr?.likes    || 0;
+    agg[k].views    += r.attr?.views    || 0;
+  });
+  const top = Object.values(agg).sort((a,b)=>b.comments-a.comments).slice(0,20);
+  const el  = document.getElementById('tAff');
+  if (!top.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>暂无数据</div>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>#</th><th>Aff ID</th><th>用户名</th><th>帖子数</th>
+      <th>总评论</th><th>均评论</th><th>总点赞</th><th>总浏览</th></tr></thead>
+    <tbody>${top.map((r,i)=>`<tr>
+      <td style="color:var(--text-secondary)">${i+1}</td>
+      <td style="color:var(--cyan)">${r.aff}</td>
+      <td>${r.name||'-'}</td>
+      <td>${r.posts}</td>
+      <td style="color:var(--purple);font-weight:600">${r.comments}</td>
+      <td>${(r.comments/r.posts).toFixed(2)}</td>
+      <td>${r.likes}</td>
+      <td>${r.views}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderTopTable(rows) {
+  const top = [...rows].sort((a,b)=>(b.attr?.comments||0)-(a.attr?.comments||0))
+    .filter(r=>(r.attr?.comments||0)>0).slice(0,20);
+  const el = document.getElementById('tTop');
+  if (!top.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>暂无有评论的帖子</div>'; return; }
+  const bReview = r => r.status?.review==='通过'
+    ? '<span class="badge badge-green">通过</span>'
+    : '<span class="badge badge-red">未通过</span>';
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>#</th><th>帖子ID</th><th>用户名</th><th>Aff</th>
+      <th>类型</th><th>评论数</th><th>点赞</th><th>浏览</th><th>审核</th><th>内容摘要</th></tr></thead>
+    <tbody>${top.map((r,i)=>`<tr>
+      <td style="color:var(--text-secondary)">${i+1}</td>
+      <td style="color:var(--cyan)">${r.id||'-'}</td>
+      <td>${r.user?.name||'-'}</td>
+      <td style="color:var(--text-secondary)">${r.user?.aff||'-'}</td>
+      <td>${r.type||'-'}</td>
+      <td style="color:var(--purple);font-weight:700;font-size:16px">${r.attr?.comments||0}</td>
+      <td>${r.attr?.likes||0}</td>
+      <td>${r.attr?.views||0}</td>
+      <td>${bReview(r)}</td>
+      <td style="color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+          title="${r.content||''}">${(r.content||'').slice(0,40)}${(r.content||'').length>40?'…':''}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+init();
+</script>
+</body>
+</html>

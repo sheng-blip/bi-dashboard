@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>用户信息审核 - BI看板</title>
+<script>var _V=Date.now();</script>
+<script>document.write('<link rel="stylesheet" href="css/style.css?v='+_V+'">');</script>
+<style>
+.src-bar {
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:10px 18px; margin-bottom:18px;
+  background:rgba(124,77,255,.06); border:1px solid rgba(124,77,255,.2);
+  border-radius:10px; font-size:12px; color:var(--purple);
+}
+.src-bar strong { color:var(--text-primary); }
+.src-bar .src-actions { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="header-dot"></div>
+    <div>
+      <div class="header-title">wj-特战队1 林见鹿运营看板</div>
+      <div class="header-sub">用户信息审核</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a href="index.html"   class="nav-btn">首页</a>
+    <a href="audit.html"   class="nav-btn">帖子审核管理</a>
+    <a href="comment.html" class="nav-btn">评论分析</a>
+    <a href="user.html"    class="nav-btn">用户信息审核管理</a>
+  </nav>
+</header>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">👤 用户信息审核管理</div>
+    <div class="page-desc">用户数据分析 · 审核 · 环比昨日</div>
+  </div>
+
+  <!-- ── 数据来源栏 ── -->
+  <div class="src-bar" id="srcBar">
+    <span>数据来源：<strong id="srcLabel">未加载</strong></span>
+    <span id="srcFields" style="color:var(--text-secondary)"></span>
+    <div class="src-actions">
+      <label class="btn btn-primary" style="cursor:pointer;font-size:12px;padding:5px 14px">
+        📂 加载用户数据.csv
+        <input type="file" id="userCsvFile" accept=".csv" style="display:none"
+               onchange="handleUserFile(this.files[0])">
+      </label>
+      <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px"
+              onclick="useFallback()">使用帖子数据</button>
+      <button class="btn btn-success" style="font-size:12px;padding:5px 14px"
+              onclick="doSaveYest()">💾 设为昨日基准</button>
+    </div>
+  </div>
+
+  <!-- ── 筛选栏 ── -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">Aff ID</span>
+      <input class="filter-input" id="fAff" placeholder="输入Aff ID" style="min-width:100px" oninput="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">搜索用户名</span>
+      <input class="filter-input" id="fName" placeholder="输入关键词" style="min-width:120px" oninput="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">帖子ID</span>
+      <input class="filter-input" id="fPostId" placeholder="输入帖子ID" type="number" style="min-width:100px" oninput="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">日期范围</span>
+      <input class="filter-input" id="fDateMin" type="date" style="min-width:130px;color-scheme:dark" onchange="applyFilter()">
+      <span style="color:var(--text-secondary);font-size:12px">~</span>
+      <input class="filter-input" id="fDateMax" type="date" style="min-width:130px;color-scheme:dark" onchange="applyFilter()">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">审核人</span>
+      <select class="filter-select" id="fMod" onchange="applyFilter()"><option value="">全部审核人</option></select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">审核结果</span>
+      <select class="filter-select" id="fReview" onchange="applyFilter()">
+        <option value="">全部</option>
+        <option value="通过">通过</option>
+        <option value="未通过">未通过</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">余额 ≥</span>
+      <input class="filter-input" id="fBalMin" placeholder="0" type="number" style="min-width:70px" oninput="applyFilter()">
+    </div>
+    <button class="btn btn-primary" onclick="applyFilter()">筛选</button>
+    <button class="btn btn-ghost"   onclick="resetFilter()">重置</button>
+  </div>
+
+  <div class="info-bar" id="infoBar" style="display:none">
+    <span id="infoText"></span>
+    <span id="infoYest" style="color:var(--text-secondary);font-size:11px"></span>
+  </div>
+
+  <!-- ── 指标卡 ── -->
+  <div class="metrics-grid" id="metricsGrid">
+    <div class="empty" style="grid-column:1/-1">
+      <div class="empty-icon">👤</div>
+      请加载「用户数据.csv」或点击「使用帖子数据」
+    </div>
+  </div>
+
+  <!-- ── 图表行1：城市分布 ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">用户城市分布 TOP10</div>
+      <div class="chart-box" id="cCity"></div>
+    </div>
+  </div>
+
+  <!-- ── 图表行2：Aff余额/收益 TOP15 ── -->
+  <div class="charts-grid">
+    <div class="chart-card wide">
+      <div class="chart-title">Aff 余额 &amp; 收益 TOP15</div>
+      <div class="chart-box-lg" id="cAffBal"></div>
+    </div>
+  </div>
+
+  <!-- ── 趋势图 ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">用户注册趋势
+        <span id="regHint" style="font-size:11px;color:var(--orange);font-weight:400;margin-left:8px"></span>
+      </div>
+      <div class="chart-box-lg" id="cRegTrend"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">认证 / 未认证趋势</div>
+      <div class="chart-box-lg" id="cCertTrend"></div>
+    </div>
+  </div>
+
+  <!-- ── 用户明细表 ── -->
+  <div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">用户明细（去重，按余额降序 TOP50）</div>
+    <div class="table-wrap" id="tUser"></div>
+  </div>
+
+  <!-- ── Aff 汇总表 ── -->
+  <div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">Aff 汇总统计 TOP30</div>
+    <div class="table-wrap" id="tAff"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script>document.write('<scr'+'ipt src="js/parser.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>document.write('<scr'+'ipt src="js/common.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// 数据源管理
+// ─────────────────────────────────────────────────────────────────────────────
+const CR       = {};
+const KEY_USER = 'bi_user_data';    // 独立存储，不与帖子数据混用
+const KEY_UMETA= 'bi_user_meta';
+let allRows    = [];   // 统一格式的用户行
+let filtered   = [];
+let dataSource = 'none';  // 'user_csv' | 'fallback'
+
+// 统一格式：{ id, username, aff, balance, earnings, certified, vip, city, status, regTime, date }
+function normalizeUserRows(rows, source) {
+  if (source === 'user_csv') {
+    // parseCSVGeneric 已填充 USER_FIELD_ALIASES 字段
+    return rows.map(r => ({
+      id:        r.id       || 0,
+      username:  r.username || '',
+      aff:       String(r.aff || ''),
+      balance:   r.balance  || 0,
+      earnings:  r.earnings || 0,
+      certified: r.certified ? (String(r.certified).includes('是')||String(r.certified)==='1'?'是':'否') : '否',
+      vip:       String(r.vip || ''),
+      city:      r.city     || '',
+      status:    r.status   || '',
+      regTime:   r.regTime instanceof Date ? r.regTime : null,
+      date:      r.regTime instanceof Date ? r.regTime : null,
+      postCount: r.postCount || 0,
+      _src: 'user_csv',
+    }));
+  } else {
+    // 从帖子数据中提取用户（去重取余额最高）
+    const map = {};
+    rows.forEach(r => {
+      const k = r.user?.aff || r.user?.name || '_x';
+      if (!map[k] || (r.user?.balance||0) > (map[k].balance||0)) {
+        map[k] = {
+          id:        r.id,
+          username:  r.user?.name  || '',
+          aff:       r.user?.aff   || '',
+          balance:   r.user?.balance   || 0,
+          earnings:  r.user?.earnings  || 0,
+          certified: r.user?.certified || '否',
+          vip:       r.user?.vip   || '',
+          city:      r.ip?.city    || '',
+          status:    r.status?.review || '',
+          moderator: r.moderator?.name || '',
+          regTime:   null,
+          date:      r.date || null,
+          postCount: 0,
+          _src: 'fallback',
+        };
+      }
+      if (map[k]) map[k].postCount = (map[k].postCount||0) + 1;
+    });
+    return Object.values(map);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 文件加载
+// ─────────────────────────────────────────────────────────────────────────────
+function handleUserFile(file) {
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = e => {
+    try {
+      const { rows, colIndex, detectedHeaders, warnings } =
+        parseCSVGeneric(e.target.result, USER_FIELD_ALIASES);
+      if (!rows.length) { toast('CSV 无有效数据', 'error'); return; }
+      const norm = normalizeUserRows(rows, 'user_csv');
+      saveUserData(norm, { colIndex, detectedHeaders, warnings, filename: file.name });
+      dataSource = 'user_csv';
+      loadAndRender();
+      toast(`✅ 已加载 ${norm.length} 条用户数据`, 'success');
+    } catch(err) { toast('❌ 解析失败: ' + err.message, 'error'); }
+  };
+  fr.readAsText(file, 'UTF-8');
+}
+
+function useFallback() {
+  const posts = loadData();
+  if (!posts?.length) { toast('请先在首页加载帖子CSV', 'warning'); return; }
+  const norm = normalizeUserRows(posts, 'fallback');
+  saveUserData(norm, { filename:'帖子数据（提取用户）' });
+  dataSource = 'fallback';
+  loadAndRender();
+  toast(`✅ 已从帖子数据提取 ${norm.length} 名用户`, 'success');
+}
+
+// 尝试自动 fetch 用户数据.csv
+async function tryAutoFetchUser() {
+  const candidates = ['./用户数据.csv', './users.csv', './user_data.csv'];
+  for (const path of candidates) {
+    try {
+      const text = await fetchCSV(path);
+      const { rows, colIndex, detectedHeaders, warnings } =
+        parseCSVGeneric(text, USER_FIELD_ALIASES);
+      if (!rows.length) continue;
+      const filename = path.split('/').pop();
+      const norm = normalizeUserRows(rows, 'user_csv');
+      saveUserData(norm, { colIndex, detectedHeaders, warnings, filename, autoFetched: true });
+      dataSource = 'user_csv';
+      loadAndRender();
+      toast(`✅ 自动加载 ${filename}（${norm.length} 条）`, 'success');
+      return;
+    } catch(_) {}
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 存储
+// ─────────────────────────────────────────────────────────────────────────────
+const KEY_UYEST = 'bi_user_yesterday';
+
+function saveUserData(rows, meta = {}) {
+  try {
+    localStorage.setItem(KEY_USER,  JSON.stringify(rows));
+    localStorage.setItem(KEY_UMETA, JSON.stringify(meta));
+  } catch(e) {}
+}
+function loadUserData() {
+  try { const r = localStorage.getItem(KEY_USER); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+function loadUserMeta() {
+  try { const r = localStorage.getItem(KEY_UMETA); return r ? JSON.parse(r) : {}; } catch(e) { return {}; }
+}
+function saveUserAsYesterday(rows) {
+  try {
+    const s = calcUserSummary(rows);
+    localStorage.setItem(KEY_UYEST, JSON.stringify({ summary:s, ts:new Date().toISOString(), count:rows.length }));
+  } catch(e) {}
+}
+function loadUserYesterday() {
+  try { const r = localStorage.getItem(KEY_UYEST); return r ? JSON.parse(r) : null; } catch(e) { return null; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 数据摘要（用户维度）
+// ─────────────────────────────────────────────────────────────────────────────
+function calcUserSummary(rows) {
+  const total     = rows.length;
+  const certified = rows.filter(r => r.certified === '是').length;
+  const totBal    = rows.reduce((a,r) => a + (r.balance||0), 0);
+  const totEarn   = rows.reduce((a,r) => a + (r.earnings||0), 0);
+  const avgBal    = total > 0 ? +(totBal/total).toFixed(1) : 0;
+  const maxBal    = total > 0 ? Math.max(...rows.map(r=>r.balance||0)) : 0;
+  const withEarn  = rows.filter(r => (r.earnings||0)>0).length;
+  const uniqueAff = new Set(rows.map(r=>r.aff).filter(Boolean)).size;
+  const passed    = rows.filter(r => r.status === '通过').length;
+  const failed    = rows.filter(r => r.status === '未通过').length;
+  const passRate  = total > 0 ? +(passed / total * 100).toFixed(1) : 0;
+  const failRate  = total > 0 ? +(failed / total * 100).toFixed(1) : 0;
+  return { total, certified, totBal, totEarn, avgBal, maxBal, withEarn, uniqueAff, passed, failed, passRate, failRate };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 筛选（独立，不影响其他模块）
+// ─────────────────────────────────────────────────────────────────────────────
+function readFilters() {
+  const dMin = document.getElementById('fDateMin').value;
+  const dMax = document.getElementById('fDateMax').value;
+  return {
+    aff:       document.getElementById('fAff').value.trim()       || undefined,
+    name:      document.getElementById('fName').value.trim()      || undefined,
+    postId:    parseInt(document.getElementById('fPostId').value)  || undefined,
+    moderator: document.getElementById('fMod').value              || undefined,
+    review:    document.getElementById('fReview').value           || undefined,
+    balMin:    parseFloat(document.getElementById('fBalMin').value) || undefined,
+    dateMin:   dMin ? new Date(dMin + 'T00:00:00') : undefined,
+    dateMax:   dMax ? new Date(dMax + 'T23:59:59') : undefined,
+  };
+}
+
+function filterUserRows(rows, f) {
+  return rows.filter(r => {
+    if (f.aff       && r.aff !== f.aff)                                          return false;
+    if (f.name      && !r.username.toLowerCase().includes(f.name.toLowerCase())) return false;
+    if (f.postId    && (r.id||0) !== f.postId)                                   return false;
+    if (f.moderator && r.moderator !== f.moderator)                              return false;
+    if (f.review    && r.status !== f.review)                                    return false;
+    if (f.balMin    && (r.balance||0) < f.balMin)                                return false;
+    if (f.dateMin   && (r.date instanceof Date) && r.date < f.dateMin)           return false;
+    if (f.dateMax   && (r.date instanceof Date) && r.date > f.dateMax)           return false;
+    return true;
+  });
+}
+
+function applyFilter() {
+  if (!allRows.length) return;
+  filtered = filterUserRows(allRows, readFilters());
+  render(filtered);
+}
+
+function resetFilter() {
+  ['fAff','fName','fPostId','fMod','fReview','fBalMin','fDateMin','fDateMax']
+    .forEach(id => document.getElementById(id).value = '');
+  applyFilter();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 渲染主入口
+// ─────────────────────────────────────────────────────────────────────────────
+function loadAndRender() {
+  allRows = loadUserData() || [];
+  const meta = loadUserMeta();
+
+  // 更新来源栏
+  document.getElementById('srcLabel').textContent =
+    meta.filename || (allRows.length ? `${allRows.length} 条` : '未加载');
+  if (meta.detectedHeaders) {
+    document.getElementById('srcFields').textContent =
+      `识别字段：${meta.detectedHeaders.filter(Boolean).join(' / ')}`;
+  }
+
+  // 填充审核人下拉
+  const modSel = document.getElementById('fMod');
+  modSel.innerHTML = '<option value="">全部审核人</option>';
+  const mods = [...new Set(allRows.map(r=>r.moderator).filter(Boolean))].sort();
+  populateSelect(modSel, mods);
+
+  applyFilter();
+}
+
+function render(rows) {
+  const s = calcUserSummary(rows);
+  const y = loadUserYesterday()?.summary;
+
+  document.getElementById('infoBar').style.display = 'flex';
+  document.getElementById('infoText').textContent = `筛选结果：${rows.length} 条用户`;
+  document.getElementById('infoYest').textContent = y ? `昨日基准：${y.total} 条` : '暂无昨日基准';
+
+  renderMetrics(s, y);
+  renderCharts(rows);
+  renderTrend(rows);
+  renderUserTable(rows);
+  renderAffTable(rows);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 指标卡
+// ─────────────────────────────────────────────────────────────────────────────
+function renderMetrics(s, y) {
+  document.getElementById('metricsGrid').innerHTML = [
+    { icon:'👥', label:'用户总数',   value:s.total,         prev:y?.total,     accent:'var(--cyan)' },
+    { icon:'🔗', label:'唯一Aff数', value:s.uniqueAff,     prev:y?.uniqueAff, accent:'var(--purple)' },
+    { icon:'💰', label:'总余额',     value:s.totBal,        prev:y?.totBal,    accent:'var(--yellow)' },
+    { icon:'📈', label:'总收益',     value:s.totEarn,       prev:y?.totEarn,   accent:'var(--green)' },
+    { icon:'📊', label:'平均余额',   value:s.avgBal,        prev:null,         accent:'var(--orange)' },
+    { icon:'💵', label:'有收益用户', value:s.withEarn,      prev:y?.withEarn,  accent:'var(--green)' },
+    { icon:'✅', label:'通过条数',   value:s.passed,        prev:y?.passed,    accent:'var(--green)' },
+    { icon:'❌', label:'拒绝条数',   value:s.failed,        prev:y?.failed,    accent:'var(--red)' },
+    { icon:'📈', label:'通过率',     value:s.passRate+'%',  prev:null,         raw:s.passRate, accent:'var(--green)' },
+    { icon:'📉', label:'拒绝率',     value:s.failRate+'%',  prev:null,         raw:s.failRate, accent:'var(--red)' },
+  ].map(metricCardHTML).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 图表
+// ─────────────────────────────────────────────────────────────────────────────
+function renderCharts(rows) {
+  const ax = axisStyle();
+
+  // 城市 TOP10
+  const cityMap = {};
+  rows.forEach(r=>{ const c=r.city||'未知'; cityMap[c]=(cityMap[c]||0)+1; });
+  const cities = Object.entries(cityMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  setChart(CR, 'cCity', {
+    ...baseOpt(), ...ax,
+    grid:{ top:10,bottom:20,left:60,right:20 },
+    xAxis:{ ...ax.xAxis,type:'value' },
+    yAxis:{ ...ax.yAxis,type:'category',data:cities.map(c=>c[0]) },
+    tooltip:{ ...baseOpt().tooltip,trigger:'axis' },
+    series:[{ type:'bar',data:cities.map(c=>c[1]),
+      itemStyle:{color:gradH('#7c4dff','#00d4ff')},
+      label:{show:true,position:'right',color:'#dde8ff',fontSize:11}
+    }]
+  });
+
+  // Aff 余额 & 收益 TOP15
+  const affMap = {};
+  rows.forEach(r => {
+    const k = r.aff || '未知';
+    if (!affMap[k] || (r.balance||0) > (affMap[k].bal||0)) {
+      affMap[k] = { name: r.username||k, bal: r.balance||0, earn: r.earnings||0 };
+    }
+  });
+  const top15 = Object.values(affMap).sort((a,b)=>b.bal-a.bal).slice(0,15);
+  setChart(CR, 'cAffBal', {
+    ...baseOpt(), ...ax,
+    grid:{ top:20,bottom:80,left:60,right:40 },
+    xAxis:{ ...ax.xAxis,type:'category',data:top15.map(t=>t.name),
+            axisLabel:{...ax.xAxis.axisLabel,rotate:20,fontSize:11} },
+    yAxis:{ ...ax.yAxis,type:'value' },
+    legend:{ bottom:0,textStyle:{color:'#8899bb'} },
+    tooltip:{ ...baseOpt().tooltip,trigger:'axis' },
+    series:[
+      { name:'余额', type:'bar',data:top15.map(t=>t.bal),
+        itemStyle:{color:gradV('#ffd740','#ff9800')},
+        label:{show:true,position:'top',color:'#dde8ff',fontSize:10} },
+      { name:'收益', type:'bar',data:top15.map(t=>t.earn),
+        itemStyle:{color:gradV('#00e676','#00d4ff')},
+        label:{show:true,position:'top',color:'#dde8ff',fontSize:10} },
+    ]
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 趋势图（注册趋势 + 认证趋势）
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTrend(rows) {
+  // 用 date 字段（注册时间或其他时间）做趋势；无则用 id 分桶
+  const fakeRows = rows.map(r => ({ ...r, status:{ review: r.certified==='是'?'通过':'未通过' } }));
+  const { labels, total, passed:certCounts, failed:uncertCounts, hasDates } = getTrend(fakeRows, 10);
+
+  document.getElementById('regHint').textContent =
+    hasDates ? '' : '（无时间字段，以ID区间为轴）';
+
+  const ax  = axisStyle();
+  const xConf = {
+    ...ax.xAxis, type:'category', data:labels,
+    axisLabel:{ ...ax.xAxis.axisLabel, rotate: hasDates ? 0 : 20, fontSize:11 }
+  };
+
+  // 注册趋势（柱）
+  setChart(CR, 'cRegTrend', {
+    ...baseOpt(), ...ax,
+    grid:{ top:30,bottom:60,left:50,right:20 },
+    xAxis: xConf,
+    yAxis:{ ...ax.yAxis,type:'value' },
+    tooltip:{ ...baseOpt().tooltip,trigger:'axis' },
+    series:[{ name:'用户数',type:'bar',data:total,
+      itemStyle:{color:gradV('#7c4dff','#00d4ff')},
+      label:{show:true,position:'top',color:'#dde8ff',fontSize:10}
+    }]
+  });
+
+  // 认证/未认证趋势（双折线）
+  setChart(CR, 'cCertTrend', {
+    ...baseOpt(), ...ax,
+    grid:{ top:30,bottom:60,left:50,right:20 },
+    xAxis: xConf,
+    yAxis:{ ...ax.yAxis,type:'value' },
+    legend:{ top:0,textStyle:{color:'#8899bb'} },
+    tooltip:{ ...baseOpt().tooltip,trigger:'axis' },
+    series:[
+      { name:'已认证',type:'line',data:certCounts,smooth:true,
+        itemStyle:{color:'#00e676'},lineStyle:{width:2},
+        areaStyle:{ color:{type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(0,230,118,.25)'},{offset:1,color:'transparent'}]} } },
+      { name:'未认证',type:'line',data:uncertCounts,smooth:true,
+        itemStyle:{color:'rgba(255,255,255,.3)'},lineStyle:{width:2,type:'dashed'},
+      },
+    ]
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 表格
+// ─────────────────────────────────────────────────────────────────────────────
+function renderUserTable(rows) {
+  const top = [...rows].sort((a,b)=>(b.balance||0)-(a.balance||0)).slice(0,50);
+  const el  = document.getElementById('tUser');
+  if (!top.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📭</div>暂无数据</div>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>#</th><th>ID</th><th>用户名</th><th>Aff</th><th>认证</th>
+      <th>VIP</th><th>余额</th><th>收益</th><th>城市</th><th>发帖数</th></tr></thead>
+    <tbody>${top.map((r,i)=>`<tr>
+      <td style="color:var(--text-secondary)">${i+1}</td>
+      <td style="color:var(--cyan)">${r.id||'-'}</td>
+      <td>${r.username||'-'}</td>
+      <td style="color:var(--text-secondary)">${r.aff||'-'}</td>
+      <td>${r.certified==='是'?'<span class="badge badge-green">已认证</span>':'<span class="badge" style="color:var(--text-secondary)">未认证</span>'}</td>
+      <td>${r.vip||'-'}</td>
+      <td style="color:var(--yellow);font-weight:600">${r.balance||0}</td>
+      <td style="color:var(--green)">${r.earnings||0}</td>
+      <td>${r.city||'-'}</td>
+      <td>${r.postCount||'-'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderAffTable(rows) {
+  const agg = {};
+  rows.forEach(r => {
+    const k = r.aff || '未知';
+    if (!agg[k]) agg[k] = { aff:k, name:r.username||'', cnt:0, bal:0, earn:0, cert:0, lastId:0 };
+    agg[k].cnt++;
+    if ((r.balance||0) > agg[k].bal) { agg[k].bal=r.balance||0; agg[k].earn=r.earnings||0; agg[k].name=r.username||agg[k].name; }
+    if (r.certified==='是') agg[k].cert++;
+    if ((r.id||0) > agg[k].lastId) agg[k].lastId = r.id||0;
+  });
+  const top = Object.values(agg).sort((a,b)=>b.cnt-a.cnt).slice(0,30);
+  const el  = document.getElementById('tAff');
+  if (!top.length) { el.innerHTML='<div class="empty"><div class="empty-icon">📭</div>暂无数据</div>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>#</th><th>Aff</th><th>用户名</th><th>用户数</th>
+      <th>已认证</th><th>最高余额</th><th>最高收益</th><th>最新ID</th></tr></thead>
+    <tbody>${top.map((r,i)=>`<tr>
+      <td style="color:var(--text-secondary)">${i+1}</td>
+      <td style="color:var(--cyan)">${r.aff}</td>
+      <td>${r.name||'-'}</td>
+      <td style="font-weight:600">${r.cnt}</td>
+      <td style="color:var(--green)">${r.cert}</td>
+      <td style="color:var(--yellow)">${r.bal}</td>
+      <td style="color:var(--green)">${r.earn}</td>
+      <td style="color:var(--text-secondary)">${r.lastId||'-'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 昨日基准
+// ─────────────────────────────────────────────────────────────────────────────
+function doSaveYest() {
+  if (!allRows.length) { toast('请先加载用户数据', 'warning'); return; }
+  saveUserAsYesterday(allRows);
+  toast('✅ 已设为昨日基准', 'success');
+  render(filtered);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 初始化
+// ─────────────────────────────────────────────────────────────────────────────
+bindResize(CR);
+
+// 先尝试恢复缓存
+const cachedUser = loadUserData();
+if (cachedUser?.length) {
+  loadAndRender();
+} else {
+  // 尝试 auto-fetch，失败则等用户操作
+  tryAutoFetchUser().catch(() => {});
+}
+</script>
+</body>
+</html>

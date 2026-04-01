@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>帖子审核管理 - BI看板</title>
+<script>var _V=Date.now();</script>
+<script>document.write('<link rel="stylesheet" href="css/style.css?v='+_V+'">');</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="header-dot"></div>
+    <div>
+      <div class="header-title">wj-特战队1 林见鹿运营看板</div>
+      <div class="header-sub">审核帖子管理</div>
+    </div>
+  </div>
+  <nav class="header-nav">
+    <a href="index.html"   class="nav-btn">首页</a>
+    <a href="audit.html"   class="nav-btn">帖子审核管理</a>
+    <a href="comment.html" class="nav-btn">评论分析</a>
+    <a href="user.html"    class="nav-btn">用户信息审核管理</a>
+  </nav>
+</header>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">📋 审核帖子管理</div>
+    <div class="page-desc">帖子审核数据分析 · 按审核人 / 类型 / 结果 / ID范围筛选 · 环比昨日</div>
+  </div>
+
+  <!-- ── 筛选栏 ── -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span class="filter-label">审核人</span>
+      <select class="filter-select" id="fMod"><option value="">全部审核人</option></select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">内容类型</span>
+      <select class="filter-select" id="fType">
+        <option value="">全部类型</option>
+        <option value="视频">视频</option>
+        <option value="图片">图片</option>
+        <option value="文字">文字</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">审核结果</span>
+      <select class="filter-select" id="fReview">
+        <option value="">全部结果</option>
+        <option value="通过">通过</option>
+        <option value="未通过">未通过</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">日期范围</span>
+      <input class="filter-input" id="fDateMin" type="date" style="min-width:130px;color-scheme:dark">
+      <span style="color:var(--text-secondary);font-size:12px">~</span>
+      <input class="filter-input" id="fDateMax" type="date" style="min-width:130px;color-scheme:dark">
+    </div>
+    <button class="btn btn-primary" onclick="applyFilter()">筛选</button>
+    <button class="btn btn-ghost"   onclick="resetFilter()">重置</button>
+    <button class="btn btn-success" onclick="doSaveYest()" style="margin-left:auto">💾 设为昨日基准</button>
+  </div>
+
+  <div class="info-bar" id="infoBar" style="display:none">
+    <span id="infoText"></span>
+    <span id="infoYest" style="color:var(--text-secondary);font-size:11px"></span>
+  </div>
+
+  <!-- ── 指标卡 ── -->
+  <div class="metrics-grid" id="metricsGrid"></div>
+
+  <!-- ── 行1：审核结果 / 类型 / 城市 ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">审核结果分布</div>
+      <div class="chart-box" id="cPie"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">内容类型分布</div>
+      <div class="chart-box" id="cType"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">用户城市分布 TOP10</div>
+      <div class="chart-box" id="cCity"></div>
+    </div>
+  </div>
+
+  <!-- ── 行2：用户发帖量 TOP20（需求1） ── -->
+  <div class="charts-grid">
+    <div class="chart-card wide">
+      <div class="chart-title">用户发帖量 TOP20（按用户维度）</div>
+      <div class="chart-box-lg" id="cUserPosts"></div>
+    </div>
+  </div>
+
+  <!-- ── 行3：发帖高峰时间段 + 话题分布（需求2/3） ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">发帖高峰时间段（小时分布）
+        <span id="peakHint" style="font-size:11px;color:var(--orange);font-weight:400;margin-left:8px"></span>
+      </div>
+      <div class="chart-box" id="cPeakHours"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">话题分布 TOP15</div>
+      <div class="chart-box" id="cTopics"></div>
+    </div>
+  </div>
+
+  <!-- ── 行4：趋势图（需求4，替换原通过率图） ── -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">帖子数量趋势
+        <span id="trendHint" style="font-size:11px;color:var(--orange);font-weight:400;margin-left:8px"></span>
+      </div>
+      <div class="chart-box-lg" id="cTrend"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">通过 / 未通过趋势对比</div>
+      <div class="chart-box-lg" id="cTrendReview"></div>
+    </div>
+  </div>
+
+  <!-- ── 明细表 ── -->
+  <div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">审核明细（最近 50 条）</div>
+    <div class="table-wrap" id="tDetail"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script>document.write('<scr'+'ipt src="js/parser.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>document.write('<scr'+'ipt src="js/common.js?v='+_V+'"><\/scr'+'ipt>');</script>
+<script>
+const CR = {};
+let allRows = [], filtered = [];
+
+// ── 初始化 ────────────────────────────────────────────────────────────────────
+function init() {
+  allRows = loadData();
+  if (!allRows?.length) {
+    document.getElementById('metricsGrid').innerHTML =
+      '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📭</div>请先在首页加载CSV数据</div>';
+    return;
+  }
+  const mods = [...new Set(allRows.map(r => r.moderator?.name).filter(Boolean))].sort();
+  populateSelect(document.getElementById('fMod'), mods);
+  applyFilter();
+  bindResize(CR);
+}
+
+// ── 筛选（独立，不影响其他模块）──────────────────────────────────────────────
+function readFilters() {
+  const dMin = document.getElementById('fDateMin').value;
+  const dMax = document.getElementById('fDateMax').value;
+  return {
+    moderator: document.getElementById('fMod').value    || undefined,
+    type:      document.getElementById('fType').value   || undefined,
+    review:    document.getElementById('fReview').value || undefined,
+    dateMin:   dMin ? new Date(dMin + 'T00:00:00') : undefined,
+    dateMax:   dMax ? new Date(dMax + 'T23:59:59') : undefined,
+  };
+}
+
+function applyFilter() {
+  const f = readFilters();
+  let rows = filterRows(allRows, f);
+  if (f.dateMin || f.dateMax) {
+    rows = rows.filter(r => {
+      if (!(r.date instanceof Date)) return true;
+      if (f.dateMin && r.date < f.dateMin) return false;
+      if (f.dateMax && r.date > f.dateMax) return false;
+      return true;
+    });
+  }
+  filtered = rows;
+  render(filtered);
+}
+function resetFilter() {
+  ['fMod','fType','fReview','fDateMin','fDateMax'].forEach(id => document.getElementById(id).value = '');
+  applyFilter();
+}
+
+// ── 渲染入口 ──────────────────────────────────────────────────────────────────
+function render(rows) {
+  const s = calcSummary(rows);
+  const y = loadYesterday()?.summary;
+
+  const ids = rows.map(r => r.id).filter(Boolean);
+  document.getElementById('infoBar').style.display = 'flex';
+  document.getElementById('infoText').textContent =
+    `筛选结果：${rows.length} 条${ids.length ? ` · ID ${Math.min(...ids)} ~ ${Math.max(...ids)}` : ''}`;
+  document.getElementById('infoYest').textContent = y ? `昨日基准：${y.total} 条` : '暂无昨日基准';
+
+  renderMetrics(s, y, rows);
+  renderBaseCharts(rows, s);
+  renderUserPosts(rows);      // 需求1
+  renderPeakHours(rows);      // 需求2
+  renderTopics(rows);         // 需求3
+  renderTrend(rows);          // 需求4
+  renderTable(rows);
+}
+
+// ── 指标卡 ────────────────────────────────────────────────────────────────────
+function renderMetrics(s, y, rows) {
+  const passC     = rows.filter(r => r.status?.review === '通过').reduce((a,r) => a + (r.attr?.comments||0), 0);
+  const failC     = rows.filter(r => r.status?.review !== '通过').reduce((a,r) => a + (r.attr?.comments||0), 0);
+  const totC      = passC + failC;
+  const cPassRate = totC > 0 ? +(passC / totC * 100).toFixed(1) : 0;
+  const cFailRate = totC > 0 ? +(failC / totC * 100).toFixed(1) : 0;
+  document.getElementById('metricsGrid').innerHTML = [
+    { icon:'📄', label:'总审核帖子', value:s.total,          prev:y?.total,        accent:'var(--cyan)' },
+    { icon:'✅', label:'通过帖子',   value:s.passed,          prev:y?.passed,       accent:'var(--green)' },
+    { icon:'❌', label:'未通过帖子', value:s.failed,          prev:y?.failed,       accent:'var(--red)' },
+    { icon:'📊', label:'通过率',     value:s.passRate+'%',    prev:y?.passRate,     raw:s.passRate, accent:'var(--cyan)' },
+    { icon:'💬', label:'评论总条数', value:totC,              prev:y?.totComments,  accent:'var(--purple)' },
+    { icon:'✅', label:'评论通过数', value:passC,             prev:null,            accent:'var(--green)' },
+    { icon:'❌', label:'评论拒绝数', value:failC,             prev:null,            accent:'var(--red)' },
+    { icon:'📈', label:'评论通过率', value:cPassRate+'%',     prev:null,            raw:cPassRate, accent:'var(--green)' },
+    { icon:'📉', label:'评论拒绝率', value:cFailRate+'%',     prev:null,            raw:cFailRate, accent:'var(--red)' },
+  ].map(metricCardHTML).join('');
+}
+
+// ── 基础图表（审核结果/类型/审核员/城市）─────────────────────────────────────
+function renderBaseCharts(rows, s) {
+  const ax = axisStyle();
+
+  setChart(CR, 'cPie', {
+    ...baseOpt(),
+    tooltip:{ ...baseOpt().tooltip, trigger:'item', formatter:'{b}: {c} ({d}%)' },
+    legend: { bottom:0, textStyle:{color:'#8899bb'} },
+    series: [{ type:'pie', radius:['40%','70%'],
+      data:[
+        { value:s.passed, name:'通过',  itemStyle:{color:'#00e676'} },
+        { value:s.failed, name:'未通过',itemStyle:{color:'#ff5252'} },
+      ],
+      label:{ color:'#dde8ff' },
+      emphasis:{ itemStyle:{ shadowBlur:10, shadowColor:'rgba(0,0,0,.4)' } }
+    }]
+  });
+
+  setChart(CR, 'cType', {
+    ...baseOpt(),
+    tooltip:{ ...baseOpt().tooltip, trigger:'item', formatter:'{b}: {c} ({d}%)' },
+    legend: { bottom:0, textStyle:{color:'#8899bb'} },
+    series: [{ type:'pie', radius:['40%','70%'],
+      data:[
+        { value:s.videos, name:'视频', itemStyle:{color:'#7c4dff'} },
+        { value:s.images, name:'图片', itemStyle:{color:'#00d4ff'} },
+        { value:s.texts,  name:'文字', itemStyle:{color:'#ff9800'} },
+      ],
+      label:{ color:'#dde8ff' }
+    }]
+  });
+
+  const cityMap = {};
+  rows.forEach(r => { const c = r.ip?.city || '未知'; cityMap[c] = (cityMap[c]||0)+1; });
+  const cities = Object.entries(cityMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  setChart(CR, 'cCity', {
+    ...baseOpt(), ...ax,
+    grid:   { top:10, bottom:20, left:60, right:20 },
+    xAxis:  { ...ax.xAxis, type:'value' },
+    yAxis:  { ...ax.yAxis, type:'category', data:cities.map(c=>c[0]) },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series: [{ type:'bar', data:cities.map(c=>c[1]),
+      itemStyle:{ color:gradH('#7c4dff','#00d4ff') },
+      label:{ show:true, position:'right', color:'#dde8ff', fontSize:11 }
+    }]
+  });
+}
+
+// ── 需求1：用户发帖量 TOP20 ───────────────────────────────────────────────────
+function renderUserPosts(rows) {
+  const top = getTopUsers(rows, 20);
+  const ax  = axisStyle();
+  setChart(CR, 'cUserPosts', {
+    ...baseOpt(), ...ax,
+    grid:   { top:20, bottom:80, left:60, right:40 },
+    xAxis:  { ...ax.xAxis, type:'category',
+              data:top.map(u => u.name || u.aff || '未知'),
+              axisLabel:{ ...ax.xAxis.axisLabel, rotate:25, fontSize:11 } },
+    yAxis:  { ...ax.yAxis, type:'value' },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis',
+              formatter: p => `${p[0].axisValue}<br/>发帖数：<b>${p[0].value}</b>` },
+    series: [{ type:'bar', data:top.map(u=>u.count),
+      itemStyle:{ color:gradV('#00d4ff','#7c4dff') },
+      label:{ show:true, position:'top', color:'#dde8ff', fontSize:11 }
+    }]
+  });
+}
+
+// ── 需求2：发帖高峰时间段 ─────────────────────────────────────────────────────
+function renderPeakHours(rows) {
+  const { labels, counts, hasDates } = getHourlyDist(rows);
+  document.getElementById('peakHint').textContent =
+    hasDates ? '' : '（CSV无时间字段，暂无数据）';
+
+  const ax = axisStyle();
+  setChart(CR, 'cPeakHours', {
+    ...baseOpt(), ...ax,
+    grid:   { top:20, bottom:30, left:50, right:20 },
+    xAxis:  { ...ax.xAxis, type:'category', data:labels },
+    yAxis:  { ...ax.yAxis, type:'value' },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series: [{ type:'bar', data: hasDates ? counts : new Array(24).fill(0),
+      itemStyle:{ color:gradV('#ff9800','#ffd740') },
+      label:{ show: hasDates, position:'top', color:'#dde8ff', fontSize:10 }
+    }]
+  });
+}
+
+// ── 需求3：话题分布 TOP15 ─────────────────────────────────────────────────────
+function renderTopics(rows) {
+  const topics = getTopics(rows, 15);
+  const ax = axisStyle();
+
+  if (!topics.length) {
+    setChart(CR, 'cTopics', {
+      ...baseOpt(),
+      graphic:[{ type:'text', left:'center', top:'middle',
+        style:{ text:'内容中未检测到 #话题 标签', fill:'#7a8fbb', fontSize:14 } }]
+    });
+    return;
+  }
+
+  setChart(CR, 'cTopics', {
+    ...baseOpt(), ...ax,
+    grid:   { top:10, bottom:20, left:80, right:20 },
+    xAxis:  { ...ax.xAxis, type:'value' },
+    yAxis:  { ...ax.yAxis, type:'category', data:topics.map(t=>t.topic) },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis',
+              formatter: p => `#${p[0].axisValue}<br/>帖子数：<b>${p[0].value}</b>` },
+    series: [{ type:'bar', data:topics.map(t=>t.count),
+      itemStyle:{ color:gradH('#00e676','#00d4ff') },
+      label:{ show:true, position:'right', color:'#dde8ff', fontSize:11 }
+    }]
+  });
+}
+
+// ── 需求4：趋势图（双图）────────────────────────────────────────────────────
+function renderTrend(rows) {
+  const { labels, total, passed, failed, hasDates } = getTrend(rows, 10);
+  const hint = hasDates ? '' : '（无日期字段，以ID区间为时间轴）';
+  document.getElementById('trendHint').textContent = hint;
+
+  const ax = axisStyle();
+  const xConf = {
+    ...ax.xAxis, type:'category', data:labels,
+    axisLabel:{ ...ax.xAxis.axisLabel, rotate: hasDates ? 0 : 20, fontSize:11 }
+  };
+
+  // 帖子数量趋势（柱）
+  setChart(CR, 'cTrend', {
+    ...baseOpt(), ...ax,
+    grid:   { top:30, bottom:60, left:50, right:20 },
+    xAxis:  xConf,
+    yAxis:  { ...ax.yAxis, type:'value' },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series: [{ name:'帖子数', type:'bar', data:total,
+      itemStyle:{ color:gradV('#00d4ff','#7c4dff') },
+      label:{ show:true, position:'top', color:'#dde8ff', fontSize:10 }
+    }]
+  });
+
+  // 通过/未通过趋势（双折线）
+  setChart(CR, 'cTrendReview', {
+    ...baseOpt(), ...ax,
+    grid:   { top:30, bottom:60, left:50, right:20 },
+    xAxis:  xConf,
+    yAxis:  { ...ax.yAxis, type:'value' },
+    legend: { top:0, textStyle:{color:'#8899bb'} },
+    tooltip:{ ...baseOpt().tooltip, trigger:'axis' },
+    series: [
+      { name:'通过', type:'line', data:passed, smooth:true,
+        itemStyle:{color:'#00e676'}, lineStyle:{width:2},
+        areaStyle:{ color:{type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(0,230,118,.25)'},{offset:1,color:'transparent'}]} } },
+      { name:'未通过', type:'line', data:failed, smooth:true,
+        itemStyle:{color:'#ff5252'}, lineStyle:{width:2},
+        areaStyle:{ color:{type:'linear',x:0,y:0,x2:0,y2:1,
+          colorStops:[{offset:0,color:'rgba(255,82,82,.2)'},{offset:1,color:'transparent'}]} } },
+    ]
+  });
+}
+
+// ── 明细表 ────────────────────────────────────────────────────────────────────
+function renderTable(rows) {
+  const top = rows.slice(0, 50);
+  const el  = document.getElementById('tDetail');
+  if (!top.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>暂无数据</div>'; return; }
+
+  const bR = r => r.status?.review === '通过'
+    ? '<span class="badge badge-green">通过</span>'
+    : '<span class="badge badge-red">未通过</span>';
+  const bT = t => ({ '视频':'<span class="badge badge-purple">视频</span>',
+    '图片':'<span class="badge badge-blue">图片</span>',
+    '文字':'<span class="badge badge-orange">文字</span>' }[t] || `<span class="badge">${t||'-'}</span>`);
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>帖子ID</th><th>用户名</th><th>Aff</th><th>类型</th>
+      <th>审核结果</th><th>评论</th><th>打赏</th><th>话题</th><th>城市</th><th>审核人</th>
+    </tr></thead>
+    <tbody>${top.map(r => `<tr>
+      <td style="color:var(--cyan)">${r.id||'-'}</td>
+      <td>${r.user?.name||'-'}</td>
+      <td style="color:var(--text-secondary)">${r.user?.aff||'-'}</td>
+      <td>${bT(r.type)}</td>
+      <td>${bR(r)}</td>
+      <td>${r.attr?.comments??'-'}</td>
+      <td>${r.status?.tipCount??'-'}</td>
+      <td style="color:var(--cyan);font-size:11px">${(r.topics||[]).map(t=>'#'+t).join(' ')||'-'}</td>
+      <td>${r.ip?.city||'-'}</td>
+      <td style="color:var(--text-secondary)">${r.moderator?.name||'-'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function doSaveYest() {
+  const rows = loadData();
+  if (!rows) { toast('请先在首页加载数据', 'warning'); return; }
+  saveAsYesterday(rows); toast('✅ 已设为昨日基准', 'success');
+  render(filtered);
+}
+
+init();
+</script>
+</body>
+</html>
